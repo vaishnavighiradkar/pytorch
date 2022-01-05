@@ -89,6 +89,11 @@ class save_on_cpu():
                            during packing and copied to GPU asynchronously during unpacking.
                            Defaults to ``False``.
                            Also see :ref:`cuda-memory-pinning`.
+        non_blocking_copy_to_cpu (bool): If ``True``, tensors will be saved to
+                           CPU in a non-blocking fashion during packing and
+                           copied to GPU asynchronously during unpacking. Note
+                           that if this argument is ``True``, the ``pin_memory``
+                           argument will be ignored. Defaults to ``False``.
 
 
     Example::
@@ -112,8 +117,12 @@ class save_on_cpu():
         >>> # all intermediary tensors are released (deleted) after the call to backward
 
     """
-    def __init__(self, pin_memory=False):
+    def __init__(self, pin_memory=False, non_blocking_copy_to_cpu=False):
         def pack_to_cpu(tensor):
+            if non_blocking_copy_to_cpu:
+                packed = tensor.to("cpu", non_blocking=True)
+                return (tensor.device, packed)
+
             if not pin_memory:
                 return (tensor.device, tensor.cpu())
 
@@ -127,7 +136,9 @@ class save_on_cpu():
 
         def unpack_from_cpu(packed):
             device, tensor = packed
-            return tensor.to(device, non_blocking=pin_memory)
+            return tensor.to(
+                device, non_blocking=non_blocking_copy_to_cpu or pin_memory
+            )
 
         self.pack_hook = pack_to_cpu
         self.unpack_hook = unpack_from_cpu
